@@ -1,0 +1,3 @@
+---
+clickhouse_table4logs: "logs"
+site_path: "/srv/www/"

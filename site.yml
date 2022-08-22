@@ -1,0 +1,97 @@
+---
+- name: Install Clickhouse
+  hosts: clickhouse-01
+  pre_tasks:
+#    - name: debug
+#      debug:
+#        msg: "{{ item }}"
+#      with_items: "{{ clickhouse_dbs }}"
+#      tags: debug
+  roles:
+#:    - clickhouse
+
+- name: Install Vector
+  hosts: vector-01
+#  gather_facts: yes
+  pre_tasks:
+#    - name: debug
+#      debug:
+#        msg: "{{ item }}"
+#      with_items: "{{ clickhouse_dbs }}"
+#      tags: debug
+
+    - name: Set IP address clickhouse
+      set_fact:
+        clickhouse_node_ip: "{{ item }}"
+      with_items:
+        - "{{ hostvars['clickhouse-01']['ansible_facts']['default_ipv4']['address'] }}"
+
+  roles:
+    - vector-role
+
+- name: Install Nginx
+  hosts: lighthouse-01
+  handlers:
+    - name: Start nginx service
+      become: true
+      ansible.builtin.service:
+        name: nginx.service
+        enabled: true
+        state: restarted
+      tags: nginx
+
+  pre_tasks:
+    - name: Set IP addresd vector
+      set_fact:
+        vector_node_ip: "{{ item }}"
+      with_items:
+        - "{{ hostvars['vector-01']['ansible_facts']['default_ipv4']['address'] }}"
+      tags: nginx
+
+  tasks:
+    - name: Install epel-release
+      become: true
+      ansible.builtin.yum:
+        name: epel-release
+        state: present
+      tags: nginx
+
+    - name: Install nginx
+      become: true
+      ansible.builtin.yum:
+        name: nginx
+        state: present
+      notify: Start nginx service
+      tags: nginx
+
+    - name: Create nginx.conf
+      become: true
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+        mode: 0644
+        backup: true
+      notify: Start nginx service
+      tags: nginx
+
+    - name: Open port for nginx
+      become: true
+      firewalld:
+        permanent: true
+        port: 80/tcp
+        state: enabled
+        zone: public
+      tags: nginx
+
+- name: Install Lighthouse
+  hosts: lighthouse-01
+#  gather_facts: yes
+  pre_tasks:
+    - name: Set IP addresd vector
+      set_fact:
+        vector_node_ip: "{{ item }}"
+      with_items:
+        - "{{ hostvars['vector-01']['ansible_facts']['default_ipv4']['address'] }}"
+
+  roles:
+    - lighthouse-role
